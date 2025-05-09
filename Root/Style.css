@@ -1,0 +1,65 @@
+/* style.css */
+body {
+    margin: 0;
+    padding: 20px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background: #1a1a1a;
+    color: white;
+    font-family: Arial, sans-serif;
+}
+
+.container {
+    text-align: center;
+    max-width: 600px;
+}
+
+video {
+    width: 100%;
+    max-width: 400px;
+    height: auto;
+    border: 2px solid #333;
+    border-radius: 10px;
+    background: black;
+    margin-bottom: 20px;
+}
+
+.controls {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin-bottom: 20px;
+}
+
+button {
+    padding: 12px 24px;
+    font-size: 16px;
+    cursor: pointer;
+    border: none;
+    border-radius: 5px;
+    transition: 0.3s;
+}
+
+#startBtn {
+    background: #4CAF50;
+    color: white;
+}
+
+#stopAlarmBtn {
+    background: #f44336;
+    color: white;
+}
+
+button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+#status {
+    font-size: 18px;
+    padding: 10px;
+    border-radius: 5px;
+    background: #333;
+}
