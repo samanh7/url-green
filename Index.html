@@ -1,113 +1,135 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fa" dir="rtl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smart Color Guard</title>
+    <title>سیستم تشخیص رنگ سبز پیشرفته</title>
     <style>
+        /* تنظیمات پایه */
+        :root {
+            --primary: #4CAF50;
+            --danger: #f44336;
+            --background: #1a1a1a;
+        }
+
         body {
             margin: 0;
             padding: 20px;
             display: flex;
             flex-direction: column;
             align-items: center;
-            background: #1a1a1a;
+            background: var(--background);
             color: white;
-            font-family: Arial, sans-serif;
+            font-family: Tahoma;
         }
 
-        #videoPreview {
+        /* استایل بخش ویدئو */
+        #videoContainer {
+            position: relative;
             width: 100%;
-            max-width: 600px;
-            height: auto;
-            border: 2px solid #333;
+            max-width: 640px;
+            margin: 20px 0;
+            border: 2px solid #444;
             border-radius: 10px;
+            overflow: hidden;
+        }
+
+        #videoFeed {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        /* کنترل‌ها */
+        .controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            width: 100%;
+            max-width: 640px;
             margin: 20px 0;
         }
 
-        .controls {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-        }
-
         button {
-            padding: 12px 24px;
+            padding: 15px 30px;
             font-size: 16px;
             border: none;
-            border-radius: 5px;
+            border-radius: 8px;
             cursor: pointer;
-            transition: opacity 0.3s;
+            transition: 0.3s;
         }
 
         #startBtn {
-            background: #4CAF50;
+            background: var(--primary);
             color: white;
         }
 
         #stopBtn {
-            background: #f44336;
+            background: var(--danger);
             color: white;
         }
 
+        /* وضعیت سیستم */
         #status {
-            padding: 10px;
-            border-radius: 5px;
+            width: 100%;
+            max-width: 640px;
+            padding: 15px;
+            border-radius: 8px;
             background: #333;
             margin-top: 10px;
+            text-align: center;
+        }
+
+        /* نمایشگر رنگ */
+        #colorPreview {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            margin: 20px auto;
+            border: 3px solid white;
         }
     </style>
 </head>
 <body>
-    <video id="videoPreview" playsinline autoplay></video>
-    <div class="controls">
-        <button id="startBtn">Start Monitoring</button>
-        <button id="stopBtn" disabled>Stop</button>
+    <h1>تشخیص رنگ سبز از دوربین</h1>
+    
+    <div id="videoContainer">
+        <video id="videoFeed" playsinline autoplay></video>
     </div>
-    <div id="status">Status: Ready</div>
+
+    <div class="controls">
+        <button id="startBtn">فعال‌سازی دوربین</button>
+        <button id="stopBtn" disabled>توقف سیستم</button>
+    </div>
+
+    <div id="status">وضعیت: سیستم آماده به کار است</div>
+    <div id="colorPreview"></div>
 
     <script>
-        class ColorGuard {
+        class ColorDetectionSystem {
             constructor() {
-                this.videoElement = document.getElementById('videoPreview');
+                // انتخاب المان‌ها
+                this.video = document.getElementById('videoFeed');
                 this.startBtn = document.getElementById('startBtn');
                 this.stopBtn = document.getElementById('stopBtn');
-                this.statusDiv = document.getElementById('status');
-                
+                this.status = document.getElementById('status');
+                this.colorPreview = document.getElementById('colorPreview');
+
+                // تنظیمات اولیه
                 this.mediaStream = null;
-                this.alarmSound = null;
                 this.analysisInterval = null;
-                
-                this.initialize();
-            }
+                this.isMonitoring = false;
 
-            async initialize() {
-                try {
-                    await this.loadAlarmSound();
-                    this.setupEventListeners();
-                    this.statusDiv.textContent = 'System Ready';
-                } catch (error) {
-                    this.handleError('Initialization Failed', error);
-                }
-            }
-
-            async loadAlarmSound() {
-                try {
-                    const response = await fetch('https://assets.mixkit.co/active_storage/sfx/2590/2590-preview.mp3');
-                    const blob = await response.blob();
-                    this.alarmSound = new Audio(URL.createObjectURL(blob));
-                    this.alarmSound.loop = true;
-                } catch (error) {
-                    throw new Error('Alarm sound loading failed');
-                }
+                // تنظیم رویدادها
+                this.setupEventListeners();
             }
 
             setupEventListeners() {
-                this.startBtn.addEventListener('click', () => this.startMonitoring());
-                this.stopBtn.addEventListener('click', () => this.stopMonitoring());
+                this.startBtn.addEventListener('click', () => this.initializeCamera());
+                this.stopBtn.addEventListener('click', () => this.stopSystem());
             }
 
-            async startMonitoring() {
+            async initializeCamera() {
                 try {
                     this.mediaStream = await navigator.mediaDevices.getUserMedia({
                         video: {
@@ -117,83 +139,93 @@
                         }
                     });
                     
-                    this.videoElement.srcObject = this.mediaStream;
-                    this.startBtn.disabled = true;
-                    this.stopBtn.disabled = false;
-                    this.statusDiv.textContent = 'Monitoring...';
+                    this.video.srcObject = this.mediaStream;
+                    this.toggleControls(true);
+                    this.updateStatus('دوربین فعال شد - در حال تحلیل...');
+                    this.startAnalysis();
                     
-                    this.startColorAnalysis();
                 } catch (error) {
-                    this.handleError('Camera Access Error', error);
+                    this.handleError(`خطا در دسترسی به دوربین: ${error.message}`);
                 }
             }
 
-            startColorAnalysis() {
+            startAnalysis() {
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
                 
                 this.analysisInterval = setInterval(() => {
-                    canvas.width = this.videoElement.videoWidth;
-                    canvas.height = this.videoElement.videoHeight;
-                    ctx.drawImage(this.videoElement, 0, 0);
+                    canvas.width = this.video.videoWidth;
+                    canvas.height = this.video.videoHeight;
+                    ctx.drawImage(this.video, 0, 0);
                     
                     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                    const greenPercentage = this.calculateGreenPercentage(imageData.data);
-                    
-                    if (greenPercentage < 40) {
-                        this.triggerAlarm();
-                    }
+                    this.processImage(imageData.data);
                 }, 500);
             }
 
-            calculateGreenPercentage(imageData) {
+            processImage(pixelData) {
                 let greenPixels = 0;
-                for (let i = 0; i < imageData.length; i += 4) {
-                    const [r, g, b] = imageData.slice(i, i + 3);
-                    if (g > r * 1.5 && g > b * 1.5 && g > 100) {
+                
+                for (let i = 0; i < pixelData.length; i += 4) {
+                    const r = pixelData[i];
+                    const g = pixelData[i+1];
+                    const b = pixelData[i+2];
+                    
+                    // شرایط تشخیص سبز با حاشیه خطای گسترده
+                    if (
+                        g > 50 && 
+                        g > r * 1.2 && 
+                        g > b * 1.2 && 
+                        (g - r) > 20 && 
+                        (g - b) > 20
+                    ) {
                         greenPixels++;
                     }
                 }
-                return (greenPixels / (imageData.length / 4)) * 100;
+                
+                const greenPercentage = (greenPixels / (pixelData.length / 4)) * 100;
+                this.updateColorPreview(greenPercentage);
             }
 
-            triggerAlarm() {
-                this.statusDiv.textContent = 'ALARM! Non-green detected';
-                this.statusDiv.style.color = '#ff4444';
-                this.alarmSound.play().catch(error => {
-                    this.handleError('Audio Playback Error', error);
-                });
+            updateColorPreview(percentage) {
+                this.colorPreview.style.backgroundColor = `rgb(0, ${Math.min(255, percentage * 2.55)}, 0)`;
+                this.status.textContent = `درصد سبزی: ${percentage.toFixed(1)}%`;
             }
 
-            async stopMonitoring() {
+            toggleControls(isActive) {
+                this.startBtn.disabled = isActive;
+                this.stopBtn.disabled = !isActive;
+                this.isMonitoring = isActive;
+            }
+
+            updateStatus(message) {
+                this.status.textContent = message;
+            }
+
+            handleError(errorMessage) {
+                console.error(errorMessage);
+                this.status.style.color = '#ff4444';
+                this.status.textContent = errorMessage;
+                this.toggleControls(false);
+            }
+
+            stopSystem() {
                 if (this.mediaStream) {
                     this.mediaStream.getTracks().forEach(track => track.stop());
                 }
                 if (this.analysisInterval) {
                     clearInterval(this.analysisInterval);
                 }
-                if (this.alarmSound) {
-                    this.alarmSound.pause();
-                    this.alarmSound.currentTime = 0;
-                }
-                
-                this.startBtn.disabled = false;
-                this.stopBtn.disabled = true;
-                this.statusDiv.textContent = 'System Ready';
-                this.statusDiv.style.color = 'white';
-            }
-
-            handleError(context, error) {
-                console.error(`${context}:`, error);
-                this.statusDiv.textContent = `${context}: ${error.message}`;
-                this.statusDiv.style.color = '#ff4444';
+                this.toggleControls(false);
+                this.updateStatus('سیستم متوقف شد');
+                this.colorPreview.style.backgroundColor = 'transparent';
             }
         }
 
-        // Initialize Application
-        window.addEventListener('DOMContentLoaded', () => {
-            new ColorGuard();
+        // راه‌اندازی سیستم پس از بارگذاری کامل صفحه
+        window.addEventListener('load', () => {
+            new ColorDetectionSystem();
         });
     </script>
 </body>
-  </html>
+</html>
