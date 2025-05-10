@@ -1,21 +1,138 @@
-<!-- index.html -->
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fa" dir="rtl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Color Guard</title>
-    <link rel="stylesheet" href="style.css">
+    <title>شناسایی سبز پویا</title>
+    <style>
+        /* استایل قبلی با تغییرات زیر */
+        :root {
+            --target-hue: 117;
+            --target-saturation: 72;
+            --target-value: 80;
+        }
+        .color-spectrum {
+            width: 100%;
+            height: 50px;
+            background: linear-gradient(
+                to right,
+                hsl(60, 100%, 50%),
+                hsl(180, 100%, 50%),
+                hsl(120, 100%, 50%),
+                hsl(60, 100%, 50%)
+            );
+            margin: 10px 0;
+        }
+    </style>
 </head>
 <body>
-    <div class="container">
-        <video id="video" playsinline autoplay></video>
-        <div class="controls">
-            <button id="startBtn">Start Camera</button>
-            <button id="stopAlarmBtn" disabled>Stop Alarm</button>
-        </div>
-        <div id="status">Status: Ready</div>
-    </div>
-    <script src="script.js"></script>
+    <!-- المان‌های قبلی + طیف رنگی -->
+    <div class="color-spectrum"></div>
+
+    <script>
+        class AdaptiveGreenDetector {
+            constructor() {
+                // ... متغیرهای قبلی ...
+                
+                // تنظیمات اصلی بر اساس رنگ مرجع
+                this.TARGET_COLOR = {
+                    hsv: { h: 117, s: 72, v: 80 },
+                    rgb: { r: 62, g: 206, b: 56 },
+                    tolerance: {
+                        h: 30,   // ±30 درجه برای Hue
+                        s: 40,   // ±40% برای Saturation
+                        v: 40    // ±40% برای Value
+                    }
+                };
+            }
+
+            isGreenDetected(h, s, v) {
+                const t = this.TARGET_COLOR;
+                return (
+                    // محدوده Hue گسترده
+                    (h >= t.hsv.h - t.tolerance.h && h <= t.hsv.h + t.tolerance.h) &&
+                    
+                    // محدوده Saturation پویا
+                    (s >= t.hsv.s - t.tolerance.s && s <= t.hsv.s + t.tolerance.s) &&
+                    
+                    // محدوده Value تطبیقی
+                    (v >= t.hsv.v - t.tolerance.v && v <= t.hsv.v + t.tolerance.v) &&
+                    
+                    // بررسی تفاوت RGB
+                    this.checkRGBRatio()
+                );
+            }
+
+            checkRGBRatio() {
+                // نمونه‌گیری از منطقه مرکزی تصویر
+                const { data } = this.getCentralRegionPixels();
+                let validPixels = 0;
+                
+                for(let i=0; i<data.length; i+=4) {
+                    const r = data[i];
+                    const g = data[i+1];
+                    const b = data[i+2];
+                    
+                    // شرایط مبتنی بر RGB مرجع
+                    const condition = (
+                        g > r * 2 &&      // نسبت سبز به قرمز
+                        g > b * 2 &&      // نسبت سبز به آبی
+                        Math.abs(g - this.TARGET_COLOR.rgb.g) < 60 &&
+                        Math.abs(r - this.TARGET_COLOR.rgb.r) < 40 &&
+                        Math.abs(b - this.TARGET_COLOR.rgb.b) < 40
+                    );
+                    
+                    if(condition) validPixels++;
+                }
+                
+                return (validPixels / (data.length/4)) > 0.4;
+            }
+
+            getCentralRegionPixels() {
+                // نمونه‌گیری از 20% مرکز تصویر
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                const w = this.video.videoWidth;
+                const h = this.video.videoHeight;
+                
+                canvas.width = w;
+                canvas.height = h;
+                ctx.drawImage(this.video, 0, 0);
+                
+                const xStart = Math.floor(w * 0.4);
+                const yStart = Math.floor(h * 0.4);
+                const width = Math.floor(w * 0.2);
+                const height = Math.floor(h * 0.2);
+                
+                return ctx.getImageData(xStart, yStart, width, height);
+            }
+
+            // ... سایر متدها با تغییرات جزئی ...
+        }
+
+        // تابع تبدیل RGB به HSV با دقت بالا
+        function rgbToHsv(r, g, b) {
+            r /= 255, g /= 255, b /= 255;
+            const max = Math.max(r, g, b), min = Math.min(r, g, b);
+            let h, s, v = max;
+            const d = max - min;
+            s = max === 0 ? 0 : d / max;
+            
+            if (max === min) h = 0;
+            else {
+                switch(max) {
+                    case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+                    case g: h = (b - r) / d + 2; break;
+                    case b: h = (r - g) / d + 4; break;
+                }
+                h *= 60;
+            }
+            return {
+                h: Math.round(h),
+                s: Math.round(s * 100),
+                v: Math.round(v * 100)
+            };
+        }
+    </script>
 </body>
 </html>
