@@ -1,34 +1,39 @@
-class AdvancedColorMonitor {
+class ColorDetectionSystem {
     constructor() {
-        this.video = document.getElementById('videoFeed');
+        this.videoElement = document.getElementById('videoFeed');
         this.startBtn = document.getElementById('startBtn');
         this.stopBtn = document.getElementById('stopBtn');
-        this.status = document.getElementById('status');
+        this.permissionAlert = document.getElementById('permissionAlert');
+        this.retryBtn = document.getElementById('retryBtn');
+        this.statusText = document.getElementById('statusText');
         this.colorPreview = document.getElementById('colorPreview');
-        this.alarmFile = document.getElementById('alarmFile');
-        this.sensitivity = document.getElementById('sensitivity');
 
         this.mediaStream = null;
-        this.analyzerInterval = null;
-        this.alarmSound = null;
-        this.threshold = 10;
+        this.isCameraActive = false;
+        this.analysisInterval = null;
 
         this.initialize();
     }
 
     initialize() {
+        this.checkCameraSupport();
         this.setupEventListeners();
-        this.updateSensitivityDisplay();
+    }
+
+    checkCameraSupport() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            this.showError('مرورگر شما از دوربین پشتیبانی نمی‌کند');
+            this.startBtn.disabled = true;
+        }
     }
 
     setupEventListeners() {
-        this.startBtn.addEventListener('click', () => this.startMonitoring());
-        this.stopBtn.addEventListener('click', () => this.stopMonitoring());
-        this.alarmFile.addEventListener('change', (e) => this.loadAlarmSound(e));
-        this.sensitivity.addEventListener('input', () => this.updateSensitivity());
+        this.startBtn.addEventListener('click', () => this.activateCamera());
+        this.stopBtn.addEventListener('click', () => this.stopCamera());
+        this.retryBtn.addEventListener('click', () => this.activateCamera());
     }
 
-    async startMonitoring() {
+    async activateCamera() {
         try {
             this.mediaStream = await navigator.mediaDevices.getUserMedia({
                 video: {
@@ -38,38 +43,62 @@ class AdvancedColorMonitor {
                 }
             });
             
-            this.video.srcObject = this.mediaStream;
-            this.toggleControls(true);
-            this.updateStatus('دوربین فعال شد - در حال تحلیل...');
-            this.startColorAnalysis();
+            this.handleCameraSuccess();
         } catch (error) {
-            this.handleError('خطای دسترسی به دوربین', error);
+            this.handleCameraError(error);
         }
+    }
+
+    handleCameraSuccess() {
+        this.videoElement.srcObject = this.mediaStream;
+        this.isCameraActive = true;
+        this.startBtn.disabled = true;
+        this.stopBtn.disabled = false;
+        this.permissionAlert.style.display = 'none';
+        this.statusText.textContent = 'دوربین فعال - در حال تحلیل';
+        this.startColorAnalysis();
+    }
+
+    handleCameraError(error) {
+        console.error('Camera Error:', error);
+        this.permissionAlert.style.display = 'flex';
+        
+        let errorMessage = 'خطا در دسترسی به دوربین';
+        switch(error.name) {
+            case 'NotAllowedError':
+                errorMessage = 'دسترسی به دوربین رد شد!';
+                break;
+            case 'NotFoundError':
+                errorMessage = 'دوربین یافت نشد';
+                break;
+            case 'OverconstrainedError':
+                errorMessage = 'تنظیمات دوربین پشتیبانی نمی‌شود';
+                break;
+        }
+        
+        this.statusText.textContent = errorMessage;
+        this.statusText.style.color = '#ff4444';
     }
 
     startColorAnalysis() {
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
 
-        this.analyzerInterval = setInterval(() => {
-            canvas.width = this.video.videoWidth;
-            canvas.height = this.video.videoHeight;
-            ctx.drawImage(this.video, 0, 0);
+        this.analysisInterval = setInterval(() => {
+            if (!this.videoElement.videoWidth) return;
 
+            canvas.width = this.videoElement.videoWidth;
+            canvas.height = this.videoElement.videoHeight;
+            
+            ctx.drawImage(this.videoElement, 0, 0);
             const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const greenPercentage = this.calculateGreenPercentage(imageData.data);
             
-            this.updateColorPreview(greenPercentage);
-            
-            if (greenPercentage < this.threshold) {
-                this.triggerAlarm();
-            }
+            this.processFrame(imageData.data);
         }, 500);
     }
 
-    calculateGreenPercentage(pixelData) {
+    processFrame(pixelData) {
         let greenPixels = 0;
-        const totalPixels = pixelData.length / 4;
         
         for (let i = 0; i < pixelData.length; i += 4) {
             const r = pixelData[i];
@@ -80,92 +109,49 @@ class AdvancedColorMonitor {
                 greenPixels++;
             }
         }
-        return (greenPixels / totalPixels) * 100;
+        
+        const greenPercentage = (greenPixels / (pixelData.length / 4)) * 100;
+        this.updateUI(greenPercentage);
     }
 
     isGreenPixel(r, g, b) {
         return (
-            g > 100 &&
-            g > r * 2 &&
-            g > b * 2 &&
-            (g - r) > 50 &&
-            (g - b) > 50
+            g > 80 &&
+            g > r * 1.5 &&
+            g > b * 1.5 &&
+            (g - r) > 30 &&
+            (g - b) > 30
         );
     }
 
-    async loadAlarmSound(event) {
-        const file = event.target.files[0];
-        if (!file) return;
-
-        try {
-            this.alarmSound = new Audio(URL.createObjectURL(file));
-            this.updateStatus('فایل آلارم با موفقیت بارگذاری شد');
-        } catch (error) {
-            this.handleError('خطای بارگیری فایل صوتی', error);
-        }
+    updateUI(percentage) {
+        this.colorPreview.style.backgroundColor = `rgb(0, ${Math.min(255, percentage * 2.55)}, 0)`;
+        this.statusText.textContent = `درصد سبزی تشخیص داده شده: ${percentage.toFixed(1)}%`;
     }
 
-    triggerAlarm() {
-        if (!this.alarmSound) {
-            this.updateStatus('هشدار! فایل آلارم انتخاب نشده', true);
-            return;
-        }
-
-        this.alarmSound.play()
-            .catch(error => {
-                this.updateStatus('خطای پخش صدا: لطفا مجوزها را بررسی کنید', true);
-            });
-
-        this.status.textContent = `هشدار! سطح سبزی به ${this.threshold}% رسید`;
-        this.status.style.color = '#ff4444';
-    }
-
-    updateSensitivity() {
-        this.threshold = parseInt(this.sensitivity.value);
-        document.getElementById('sensitivityValue').textContent = this.threshold;
-    }
-
-    updateSensitivityDisplay() {
-        document.getElementById('sensitivityValue').textContent = this.threshold;
-    }
-
-    updateColorPreview(percentage) {
-        const greenValue = Math.min(255, Math.floor(percentage * 2.55));
-        this.colorPreview.style.backgroundColor = `rgb(0, ${greenValue}, 0)`;
-    }
-
-    toggleControls(isActive) {
-        this.startBtn.disabled = isActive;
-        this.stopBtn.disabled = !isActive;
-    }
-
-    updateStatus(message, isError = false) {
-        this.status.textContent = message;
-        this.status.style.color = isError ? '#ff4444' : 'white';
-    }
-
-    stopMonitoring() {
+    stopCamera() {
         if (this.mediaStream) {
             this.mediaStream.getTracks().forEach(track => track.stop());
         }
-        if (this.analyzerInterval) {
-            clearInterval(this.analyzerInterval);
-        }
-        if (this.alarmSound) {
-            this.alarmSound.pause();
+        if (this.analysisInterval) {
+            clearInterval(this.analysisInterval);
         }
         
-        this.toggleControls(false);
-        this.updateStatus('سیستم متوقف شد');
+        this.videoElement.srcObject = null;
+        this.isCameraActive = false;
+        this.startBtn.disabled = false;
+        this.stopBtn.disabled = true;
+        this.statusText.textContent = 'سیستم متوقف شد';
         this.colorPreview.style.backgroundColor = 'transparent';
     }
 
-    handleError(context, error) {
-        console.error(`${context}:`, error);
-        this.updateStatus(`${context}: ${error.message}`, true);
-        this.stopMonitoring();
+    showError(message) {
+        this.statusText.textContent = message;
+        this.statusText.style.color = '#ff4444';
     }
 }
 
-// راه اندازی سیستم
-window.addEventListener('load', () => new AdvancedColorMonitor());
+// Initialize when DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+    new ColorDetectionSystem();
+});
