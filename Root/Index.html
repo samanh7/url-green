@@ -3,136 +3,229 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>شناسایی سبز پویا</title>
+    <title>سیستم تشخیص رنگ سبز پیشرفته</title>
     <style>
-        /* استایل قبلی با تغییرات زیر */
+        /* تنظیمات پایه */
         :root {
-            --target-hue: 117;
-            --target-saturation: 72;
-            --target-value: 80;
+            --primary: #4CAF50;
+            --danger: #f44336;
+            --background: #1a1a1a;
         }
-        .color-spectrum {
+
+        body {
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: var(--background);
+            color: white;
+            font-family: Tahoma;
+        }
+
+        /* استایل بخش ویدئو */
+        #videoContainer {
+            position: relative;
             width: 100%;
-            height: 50px;
-            background: linear-gradient(
-                to right,
-                hsl(60, 100%, 50%),
-                hsl(180, 100%, 50%),
-                hsl(120, 100%, 50%),
-                hsl(60, 100%, 50%)
-            );
-            margin: 10px 0;
+            max-width: 640px;
+            margin: 20px 0;
+            border: 2px solid #444;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        #videoFeed {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        /* کنترل‌ها */
+        .controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            width: 100%;
+            max-width: 640px;
+            margin: 20px 0;
+        }
+
+        button {
+            padding: 15px 30px;
+            font-size: 16px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+
+        #startBtn {
+            background: var(--primary);
+            color: white;
+        }
+
+        #stopBtn {
+            background: var(--danger);
+            color: white;
+        }
+
+        /* وضعیت سیستم */
+        #status {
+            width: 100%;
+            max-width: 640px;
+            padding: 15px;
+            border-radius: 8px;
+            background: #333;
+            margin-top: 10px;
+            text-align: center;
+        }
+
+        /* نمایشگر رنگ */
+        #colorPreview {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            margin: 20px auto;
+            border: 3px solid white;
         }
     </style>
 </head>
 <body>
-    <!-- المان‌های قبلی + طیف رنگی -->
-    <div class="color-spectrum"></div>
+    <h1>تشخیص رنگ سبز از دوربین</h1>
+    
+    <div id="videoContainer">
+        <video id="videoFeed" playsinline autoplay></video>
+    </div>
+
+    <div class="controls">
+        <button id="startBtn">فعال‌سازی دوربین</button>
+        <button id="stopBtn" disabled>توقف سیستم</button>
+    </div>
+
+    <div id="status">وضعیت: سیستم آماده به کار است</div>
+    <div id="colorPreview"></div>
 
     <script>
-        class AdaptiveGreenDetector {
+        class ColorDetectionSystem {
             constructor() {
-                // ... متغیرهای قبلی ...
-                
-                // تنظیمات اصلی بر اساس رنگ مرجع
-                this.TARGET_COLOR = {
-                    hsv: { h: 117, s: 72, v: 80 },
-                    rgb: { r: 62, g: 206, b: 56 },
-                    tolerance: {
-                        h: 30,   // ±30 درجه برای Hue
-                        s: 40,   // ±40% برای Saturation
-                        v: 40    // ±40% برای Value
-                    }
-                };
+                // انتخاب المان‌ها
+                this.video = document.getElementById('videoFeed');
+                this.startBtn = document.getElementById('startBtn');
+                this.stopBtn = document.getElementById('stopBtn');
+                this.status = document.getElementById('status');
+                this.colorPreview = document.getElementById('colorPreview');
+
+                // تنظیمات اولیه
+                this.mediaStream = null;
+                this.analysisInterval = null;
+                this.isMonitoring = false;
+
+                // تنظیم رویدادها
+                this.setupEventListeners();
             }
 
-            isGreenDetected(h, s, v) {
-                const t = this.TARGET_COLOR;
-                return (
-                    // محدوده Hue گسترده
-                    (h >= t.hsv.h - t.tolerance.h && h <= t.hsv.h + t.tolerance.h) &&
-                    
-                    // محدوده Saturation پویا
-                    (s >= t.hsv.s - t.tolerance.s && s <= t.hsv.s + t.tolerance.s) &&
-                    
-                    // محدوده Value تطبیقی
-                    (v >= t.hsv.v - t.tolerance.v && v <= t.hsv.v + t.tolerance.v) &&
-                    
-                    // بررسی تفاوت RGB
-                    this.checkRGBRatio()
-                );
+            setupEventListeners() {
+                this.startBtn.addEventListener('click', () => this.initializeCamera());
+                this.stopBtn.addEventListener('click', () => this.stopSystem());
             }
 
-            checkRGBRatio() {
-                // نمونه‌گیری از منطقه مرکزی تصویر
-                const { data } = this.getCentralRegionPixels();
-                let validPixels = 0;
-                
-                for(let i=0; i<data.length; i+=4) {
-                    const r = data[i];
-                    const g = data[i+1];
-                    const b = data[i+2];
+            async initializeCamera() {
+                try {
+                    this.mediaStream = await navigator.mediaDevices.getUserMedia({
+                        video: {
+                            facingMode: 'environment',
+                            width: { ideal: 1280 },
+                            height: { ideal: 720 }
+                        }
+                    });
                     
-                    // شرایط مبتنی بر RGB مرجع
-                    const condition = (
-                        g > r * 2 &&      // نسبت سبز به قرمز
-                        g > b * 2 &&      // نسبت سبز به آبی
-                        Math.abs(g - this.TARGET_COLOR.rgb.g) < 60 &&
-                        Math.abs(r - this.TARGET_COLOR.rgb.r) < 40 &&
-                        Math.abs(b - this.TARGET_COLOR.rgb.b) < 40
-                    );
+                    this.video.srcObject = this.mediaStream;
+                    this.toggleControls(true);
+                    this.updateStatus('دوربین فعال شد - در حال تحلیل...');
+                    this.startAnalysis();
                     
-                    if(condition) validPixels++;
+                } catch (error) {
+                    this.handleError(`خطا در دسترسی به دوربین: ${error.message}`);
                 }
-                
-                return (validPixels / (data.length/4)) > 0.4;
             }
 
-            getCentralRegionPixels() {
-                // نمونه‌گیری از 20% مرکز تصویر
+            startAnalysis() {
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
-                const w = this.video.videoWidth;
-                const h = this.video.videoHeight;
                 
-                canvas.width = w;
-                canvas.height = h;
-                ctx.drawImage(this.video, 0, 0);
-                
-                const xStart = Math.floor(w * 0.4);
-                const yStart = Math.floor(h * 0.4);
-                const width = Math.floor(w * 0.2);
-                const height = Math.floor(h * 0.2);
-                
-                return ctx.getImageData(xStart, yStart, width, height);
+                this.analysisInterval = setInterval(() => {
+                    canvas.width = this.video.videoWidth;
+                    canvas.height = this.video.videoHeight;
+                    ctx.drawImage(this.video, 0, 0);
+                    
+                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    this.processImage(imageData.data);
+                }, 500);
             }
 
-            // ... سایر متدها با تغییرات جزئی ...
-        }
-
-        // تابع تبدیل RGB به HSV با دقت بالا
-        function rgbToHsv(r, g, b) {
-            r /= 255, g /= 255, b /= 255;
-            const max = Math.max(r, g, b), min = Math.min(r, g, b);
-            let h, s, v = max;
-            const d = max - min;
-            s = max === 0 ? 0 : d / max;
-            
-            if (max === min) h = 0;
-            else {
-                switch(max) {
-                    case r: h = (g - b) / d + (g < b ? 6 : 0); break;
-                    case g: h = (b - r) / d + 2; break;
-                    case b: h = (r - g) / d + 4; break;
+            processImage(pixelData) {
+                let greenPixels = 0;
+                
+                for (let i = 0; i < pixelData.length; i += 4) {
+                    const r = pixelData[i];
+                    const g = pixelData[i+1];
+                    const b = pixelData[i+2];
+                    
+                    // شرایط تشخیص سبز با حاشیه خطای گسترده
+                    if (
+                        g > 50 && 
+                        g > r * 1.2 && 
+                        g > b * 1.2 && 
+                        (g - r) > 20 && 
+                        (g - b) > 20
+                    ) {
+                        greenPixels++;
+                    }
                 }
-                h *= 60;
+                
+                const greenPercentage = (greenPixels / (pixelData.length / 4)) * 100;
+                this.updateColorPreview(greenPercentage);
             }
-            return {
-                h: Math.round(h),
-                s: Math.round(s * 100),
-                v: Math.round(v * 100)
-            };
+
+            updateColorPreview(percentage) {
+                this.colorPreview.style.backgroundColor = `rgb(0, ${Math.min(255, percentage * 2.55)}, 0)`;
+                this.status.textContent = `درصد سبزی: ${percentage.toFixed(1)}%`;
+            }
+
+            toggleControls(isActive) {
+                this.startBtn.disabled = isActive;
+                this.stopBtn.disabled = !isActive;
+                this.isMonitoring = isActive;
+            }
+
+            updateStatus(message) {
+                this.status.textContent = message;
+            }
+
+            handleError(errorMessage) {
+                console.error(errorMessage);
+                this.status.style.color = '#ff4444';
+                this.status.textContent = errorMessage;
+                this.toggleControls(false);
+            }
+
+            stopSystem() {
+                if (this.mediaStream) {
+                    this.mediaStream.getTracks().forEach(track => track.stop());
+                }
+                if (this.analysisInterval) {
+                    clearInterval(this.analysisInterval);
+                }
+                this.toggleControls(false);
+                this.updateStatus('سیستم متوقف شد');
+                this.colorPreview.style.backgroundColor = 'transparent';
+            }
         }
+
+        // راه‌اندازی سیستم پس از بارگذاری کامل صفحه
+        window.addEventListener('load', () => {
+            new ColorDetectionSystem();
+        });
     </script>
 </body>
 </html>
