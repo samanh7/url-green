@@ -2,6 +2,7 @@
     --primary: #4CAF50;
     --danger: #f44336;
     --background: #1a1a1a;
+    --text-light: #ffffff;
 }
 
 body {
@@ -11,106 +12,87 @@ body {
     flex-direction: column;
     align-items: center;
     background: var(--background);
-    color: white;
-    font-family: Tahoma;
+    color: var(--text-light);
+    font-family: 'IRANSans', Tahoma, sans-serif;
 }
 
-#videoContainer {
+.video-container {
     position: relative;
     width: 100%;
     max-width: 640px;
-    margin: 20px 0;
-    border: 2px solid #444;
-    border-radius: 10px;
+    height: 480px;
+    border-radius: 12px;
     overflow: hidden;
+    background: #000;
+    margin: 20px 0;
 }
 
 #videoFeed {
     width: 100%;
-    height: auto;
-    display: block;
+    height: 100%;
+    object-fit: cover;
     transform: scaleX(-1);
+}
+
+.permission-alert {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.8);
+    color: white;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
 }
 
 .controls {
     display: flex;
-    flex-wrap: wrap;
     gap: 15px;
-    justify-content: center;
     margin: 20px 0;
-    width: 100%;
-    max-width: 640px;
 }
 
 button {
-    padding: 15px 30px;
-    font-size: 16px;
+    padding: 12px 24px;
     border: none;
     border-radius: 8px;
     cursor: pointer;
-    transition: 0.3s;
-    min-width: 150px;
+    font-size: 16px;
+    transition: opacity 0.3s;
 }
 
-#startBtn {
+.primary-btn {
     background: var(--primary);
     color: white;
 }
 
-#stopBtn {
+.danger-btn {
     background: var(--danger);
     color: white;
 }
 
-.file-input-container {
-    position: relative;
-    overflow: hidden;
+button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
 }
 
-.file-input-label {
-    display: block;
-    padding: 15px 30px;
-    background: #2196F3;
-    color: white;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: 0.3s;
-}
-
-.file-input-label:hover {
-    background: #1976D2;
-}
-
-#alarmFile {
-    position: absolute;
-    left: -9999px;
-}
-
-.config {
+.status-container {
     width: 100%;
     max-width: 640px;
-    margin: 15px 0;
-}
-
-#sensitivity {
-    width: 100%;
-    margin-top: 10px;
-}
-
-#status {
-    width: 100%;
-    max-width: 640px;
-    padding: 15px;
+    padding: 20px;
+    background: #2d2d2d;
     border-radius: 8px;
-    background: #333;
-    margin: 20px 0;
-    text-align: center;
+    margin-top: 20px;
 }
 
-#colorPreview {
-    width: 100px;
-    height: 100px;
+.color-preview {
+    width: 80px;
+    height: 80px;
     border-radius: 50%;
+    margin: 15px auto;
     border: 3px solid white;
     transition: background-color 0.3s;
 }
