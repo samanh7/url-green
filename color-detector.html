@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>سیستم تشخیص رنگ سبز</title>
+    <style>
+        :root {
+            --primary: #4CAF50;
+            --danger: #f44336;
+            --background: #1a1a1a;
+            --text-light: #ffffff;
+        }
+
+        body {
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: var(--background);
+            color: var(--text-light);
+            font-family: Tahoma, sans-serif;
+        }
+
+        .video-container {
+            position: relative;
+            width: 100%;
+            max-width: 640px;
+            height: 480px;
+            border-radius: 12px;
+            overflow: hidden;
+            background: #000;
+            margin: 20px 0;
+        }
+
+        #videoFeed {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1);
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: opacity 0.3s;
+        }
+
+        .primary-btn {
+            background: var(--primary);
+            color: white;
+        }
+
+        .danger-btn {
+            background: var(--danger);
+            color: white;
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .status-container {
+            width: 100%;
+            max-width: 640px;
+            padding: 20px;
+            background: #2d2d2d;
+            border-radius: 8px;
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        .color-preview {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            margin: 15px auto;
+            border: 3px solid white;
+            transition: background-color 0.3s;
+        }
+    </style>
+</head>
+<body>
+    <h1>سیستم نظارت هوشمند رنگ</h1>
+    
+    <div class="video-container">
+        <video id="videoFeed" playsinline autoplay></video>
+    </div>
+
+    <div class="controls">
+        <button id="startBtn" class="primary-btn">فعال‌سازی دوربین</button>
+        <button id="stopBtn" class="danger-btn" disabled>توقف سیستم</button>
+    </div>
+
+    <div class="status-container">
+        <div id="statusText">وضعیت: آماده به کار</div>
+        <div class="color-preview" id="colorPreview"></div>
+    </div>
+
+    <script>
+        class ColorDetectionSystem {
+            constructor() {
+                this.videoElement = document.getElementById('videoFeed');
+                this.startBtn = document.getElementById('startBtn');
+                this.stopBtn = document.getElementById('stopBtn');
+                this.statusText = document.getElementById('statusText');
+                this.colorPreview = document.getElementById('colorPreview');
+
+                this.mediaStream = null;
+                this.isCameraActive = false;
+                this.analysisInterval = null;
+
+                this.initialize();
+            }
+
+            initialize() {
+                this.checkCameraSupport();
+                this.setupEventListeners();
+            }
+
+            checkCameraSupport() {
+                if (!navigator.mediaDevices?.getUserMedia) {
+                    this.showError('مرورگر شما از دوربین پشتیبانی نمی‌کند');
+                    this.startBtn.disabled = true;
+                }
+            }
+
+            setupEventListeners() {
+                this.startBtn.addEventListener('click', () => this.activateCamera());
+                this.stopBtn.addEventListener('click', () => this.stopCamera());
+            }
+
+            async activateCamera() {
+                try {
+                    this.mediaStream = await navigator.mediaDevices.getUserMedia({
+                        video: {
+                            facingMode: 'environment',
+                            width: { ideal: 1280 },
+                            height: { ideal: 720 }
+                        }
+                    });
+                    this.handleCameraSuccess();
+                } catch (error) {
+                    this.handleCameraError(error);
+                }
+            }
+
+            handleCameraSuccess() {
+                this.videoElement.srcObject = this.mediaStream;
+                this.isCameraActive = true;
+                this.startBtn.disabled = true;
+                this.stopBtn.disabled = false;
+                this.statusText.textContent = 'دوربین فعال - در حال تحلیل';
+                this.startColorAnalysis();
+            }
+
+            startColorAnalysis() {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+
+                this.analysisInterval = setInterval(() => {
+                    if (!this.videoElement.videoWidth) return;
+
+                    canvas.width = this.videoElement.videoWidth;
+                    canvas.height = this.videoElement.videoHeight;
+                    ctx.drawImage(this.videoElement, 0, 0);
+
+                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    this.processFrame(imageData.data);
+                }, 500);
+            }
+
+            processFrame(pixelData) {
+                let greenPixels = 0;
+                for (let i = 0; i < pixelData.length; i += 4) {
+                    const r = pixelData[i];
+                    const g = pixelData[i+1];
+                    const b = pixelData[i+2];
+                    
+                    if (g > 80 && g > r*1.5 && g > b*1.5) greenPixels++;
+                }
+                
+                const greenPercentage = (greenPixels / (pixelData.length/4)) * 100;
+                this.updateUI(greenPercentage);
+            }
+
+            updateUI(percentage) {
+                this.colorPreview.style.backgroundColor = `rgb(0, ${Math.min(255, percentage*2.55)}, 0)`;
+                this.statusText.textContent = `درصد سبزی: ${percentage.toFixed(1)}%`;
+            }
+
+            stopCamera() {
+                if (this.mediaStream) this.mediaStream.getTracks().forEach(t => t.stop());
+                if (this.analysisInterval) clearInterval(this.analysisInterval);
+                
+                this.videoElement.srcObject = null;
+                this.isCameraActive = false;
+                this.startBtn.disabled = false;
+                this.stopBtn.disabled = true;
+                this.statusText.textContent = 'سیستم متوقف شد';
+                this.colorPreview.style.backgroundColor = 'transparent';
+            }
+
+            handleCameraError(error) {
+                let message = 'خطا در دسترسی به دوربین';
+                switch(error.name) {
+                    case 'NotAllowedError': message = 'دسترسی رد شد!'; break;
+                    case 'NotFoundError': message = 'دوربین یافت نشد'; break;
+                }
+                this.showError(message);
+            }
+
+            showError(message) {
+                this.statusText.textContent = message;
+                this.statusText.style.color = '#ff4444';
+            }
+        }
+
+        // شروع سیستم پس از بارگذاری صفحه
+        window.addEventListener('load', () => new ColorDetectionSystem());
+    </script>
+</body>
+</html>
